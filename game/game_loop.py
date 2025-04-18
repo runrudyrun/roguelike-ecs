@@ -4,7 +4,7 @@ Manages the main game loop and system execution.
 """
 import pygame
 import sys
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 
 from ecs.system import System, SystemRegistry
 from ecs.entity_manager import EntityManager
@@ -14,6 +14,9 @@ from systems.movement_system import MovementSystem
 from systems.combat_system import CombatSystem
 from systems.ai_system import AISystem
 from systems.turn_scheduler_system import TurnSchedulerSystem, GameState
+from systems.ui_system import UISystem
+from utils.debug import debug_print
+from utils.message_queue import add_message
 from game.world import World
 from components.position import Position
 
@@ -43,6 +46,11 @@ class GameLoop:
         
         # Get a reference to the entity manager
         self.entity_manager = self.world.entity_manager
+        
+        # Create the system registry
+        self.systems = SystemRegistry()
+        # Register the entity manager with the system registry
+        self.systems.set_entity_manager(self.entity_manager)
         
         # Generate the world and create the player first
         # This ensures player exists before systems try to use it
@@ -77,11 +85,28 @@ class GameLoop:
         self.render_system = RenderSystem(screen_width, screen_height, tile_size)
         self.systems.add_system(self.render_system)
         
+        # UI system (must be added last to render on top)
+        self.ui_system = UISystem(self.render_system.screen, tile_size)
+        self.systems.add_system(self.ui_system)
+        
         # Register input action callbacks
         self._register_input_callbacks()
         
         # Initialize the systems
         self.systems.initialize()
+        
+        # Initialize UI system
+        self.ui_system.initialize(self.entity_manager)
+        
+        # Add some message log listeners to game events
+        self._register_event_listeners()
+        
+        # Send initial welcome messages to the log
+        debug_print("GameLoop", "Sending initial welcome messages")
+        add_message("Welcome to Roguelike ECS!", (150, 255, 150))
+        add_message("Use arrow keys to move", (200, 200, 255))
+        add_message("Press 'a' to attack enemies", (200, 200, 255))
+        add_message("Press 'q' to quit", (200, 200, 255))
         
         # Game clock for timing
         self.clock = pygame.time.Clock()
@@ -167,6 +192,8 @@ class GameLoop:
         # Center the camera on the player
         if self.world.player_id:
             self.render_system.center_camera_on_entity(self.world.player_id, self.entity_manager)
+        
+        # Game startup messages are now handled in __init__
     
     def update(self, dt: float) -> None:
         """
@@ -182,6 +209,11 @@ class GameLoop:
         if self.input_system.action_taken:
             # Reset action taken flag for next turn
             self.input_system.action_taken = False
+            
+            # Log turn start (only every 5 turns to avoid spam)
+            turn_num = self.turn_scheduler.turn_number + 1
+            if turn_num % 5 == 0:
+                add_message(f"Turn {turn_num}", (180, 180, 180))
             
             # Process AI decisions for all enemies
             self.ai_system.update(self.entity_manager, dt)
@@ -209,6 +241,7 @@ class GameLoop:
         if self.turn_scheduler.game_state == GameState.GAME_OVER:
             # Game over handling would go here
             # For now, just print a message and keep running
+            add_message("Game Over!", (255, 50, 50))
             print("Game Over!")
             # self.running = False
     
@@ -239,6 +272,35 @@ class GameLoop:
         pygame.quit()
         sys.exit()
         
+    def _register_event_listeners(self) -> None:
+        """
+        Register event listeners for game events
+        """
+        # Add combat system event listeners
+        self.combat_system.add_attack_hit_listener(
+            lambda em, attacker, defender, damage: None  # Already handled by internal logging
+        )
+        
+        self.combat_system.add_entity_death_listener(
+            lambda em, entity, killer: self._handle_entity_death(em, entity, killer)
+        )
+    
+    def _handle_entity_death(self, entity_manager, entity_id, killer_id) -> None:
+        """
+        Handle entity death event
+        
+        Args:
+            entity_manager: The entity manager
+            entity_id: ID of the entity that died
+            killer_id: ID of the entity that killed it (if any)
+        """
+        from components.player_tag import PlayerTag
+        
+        # Check if it's the player
+        if entity_manager.has_component(entity_id, PlayerTag):
+            # Player died, game over
+            self.turn_scheduler.set_game_over()
+    
     def _activate_all_entities_for_first_turn(self) -> None:
         """
         Activate all entities for the first turn to ensure they can act

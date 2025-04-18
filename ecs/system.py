@@ -59,17 +59,36 @@ class SystemRegistry:
     def __init__(self):
         self._systems: List[System] = []
         self._initialized = False
+        self._entity_manager = None
     
     def add_system(self, system: System) -> None:
         """Add a system to the registry"""
         self._systems.append(system)
         self._initialized = False
+        
+        # If we have an entity manager, register the system with it
+        if self._entity_manager:
+            self._register_system_with_entity_manager(system)
     
     def remove_system(self, system: System) -> None:
         """Remove a system from the registry"""
         if system in self._systems:
             self._systems.remove(system)
             self._initialized = False
+    
+    def set_entity_manager(self, entity_manager) -> None:
+        """Set the entity manager for this system registry"""
+        self._entity_manager = entity_manager
+        
+        # Register all systems with the entity manager
+        for system in self._systems:
+            self._register_system_with_entity_manager(system)
+    
+    def _register_system_with_entity_manager(self, system: System) -> None:
+        """Register a system with the entity manager's component store"""
+        if self._entity_manager:
+            component_store = self._entity_manager.get_component_store()
+            component_store.register_system(system)
     
     def initialize(self) -> None:
         """Initialize the system registry by sorting systems by priority"""

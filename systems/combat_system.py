@@ -12,6 +12,8 @@ from components.combat_stats import CombatStats
 from components.health import Health
 from components.ai_intent import AIIntent, ActionType
 from components.turn_state import TurnState
+from utils.debug import debug_print
+from utils.message_queue import add_message
 
 class CombatSystem(System):
     """System responsible for handling combat between entities"""
@@ -103,16 +105,21 @@ class CombatSystem(System):
             # Apply damage to defender
             killed = defender_health.take_damage(damage)
             
+            # Log the attack
+            self._log_attack_hit(entity_manager, attacker_id, defender_id, damage)
+            
             # Notify hit listeners
             for listener in self._on_attack_hit:
                 listener(entity_manager, attacker_id, defender_id, damage)
             
-            # If the defender was killed, notify death listeners
+            # If the defender was killed, log it and notify death listeners
             if killed:
+                self._log_entity_death(entity_manager, defender_id, attacker_id)
                 for listener in self._on_entity_death:
                     listener(entity_manager, defender_id, attacker_id)
         else:
-            # Notify miss listeners
+            # Log the miss and notify miss listeners
+            self._log_attack_miss(entity_manager, attacker_id, defender_id)
             for listener in self._on_attack_miss:
                 listener(entity_manager, attacker_id, defender_id)
         
@@ -188,3 +195,72 @@ class CombatSystem(System):
     def add_entity_death_listener(self, listener: Callable) -> None:
         """Add a listener for entity death events"""
         self._on_entity_death.append(listener)
+    
+    def _log_attack_hit(self, entity_manager: EntityManager, attacker_id: int, defender_id: int, damage: int) -> None:
+        """Log an attack hit message"""
+        from components.player_tag import PlayerTag
+        
+        # Get entity names or descriptions
+        attacker_is_player = entity_manager.has_component(attacker_id, PlayerTag)
+        defender_is_player = entity_manager.has_component(defender_id, PlayerTag)
+        
+        # Format message based on who's attacking whom
+        if attacker_is_player:
+            message = f"You hit the enemy for {damage} damage!"
+            color = (150, 255, 150)  # Light green for player success
+        elif defender_is_player:
+            message = f"Enemy hits you for {damage} damage!"
+            color = (255, 150, 150)  # Light red for player taking damage
+        else:
+            message = f"Enemy attacks another enemy for {damage} damage."
+            color = (200, 200, 200)  # Gray for non-player combat
+        
+        # Log the message
+        add_message(message, color)
+        debug_print("CombatSystem", message)
+    
+    def _log_attack_miss(self, entity_manager: EntityManager, attacker_id: int, defender_id: int) -> None:
+        """Log an attack miss message"""
+        from components.player_tag import PlayerTag
+        
+        # Get entity names or descriptions
+        attacker_is_player = entity_manager.has_component(attacker_id, PlayerTag)
+        defender_is_player = entity_manager.has_component(defender_id, PlayerTag)
+        
+        # Format message based on who's attacking whom
+        if attacker_is_player:
+            message = "Your attack misses!"
+            color = (200, 200, 200)  # Gray for miss
+        elif defender_is_player:
+            message = "Enemy's attack misses you!"
+            color = (200, 220, 255)  # Light blue for player dodging
+        else:
+            message = "Enemy misses another enemy."
+            color = (180, 180, 180)  # Gray for non-player combat
+        
+        # Log the message
+        add_message(message, color)
+        debug_print("CombatSystem", message)
+    
+    def _log_entity_death(self, entity_manager: EntityManager, entity_id: int, killer_id: Optional[int] = None) -> None:
+        """Log an entity death message"""
+        from components.player_tag import PlayerTag
+        
+        # Check if player is involved
+        entity_is_player = entity_manager.has_component(entity_id, PlayerTag)
+        killer_is_player = killer_id is not None and entity_manager.has_component(killer_id, PlayerTag)
+        
+        # Format message based on who died
+        if entity_is_player:
+            message = "You have died! Game over."
+            color = (255, 50, 50)  # Bright red for player death
+        elif killer_is_player:
+            message = "You killed an enemy!"
+            color = (255, 255, 150)  # Yellow for kill
+        else:
+            message = "An enemy has died."
+            color = (180, 180, 180)  # Gray for non-player death
+        
+        # Log the message
+        add_message(message, color)
+        debug_print("CombatSystem", message)

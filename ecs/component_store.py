@@ -12,6 +12,8 @@ class ComponentStore:
         self._component_stores: Dict[Type, Dict[int, Any]] = {}
         # Dictionary mapping entity_id to a set of component types
         self._entity_components: Dict[int, Set[Type]] = {}
+        # Dictionary to store system instances by type name
+        self._systems: Dict[str, Any] = {}
     
     def add_component(self, entity_id: int, component: Any) -> None:
         """Add a component to an entity"""
@@ -102,3 +104,12 @@ class ComponentStore:
     def get_component_store_for_type(self, component_type: Type) -> Dict[int, Any]:
         """Get the component store for a specific component type"""
         return self._component_stores.get(component_type, {})
+    
+    def register_system(self, system: Any) -> None:
+        """Register a system with the component store"""
+        system_type = type(system).__name__
+        self._systems[system_type] = system
+    
+    def get_system(self, system_type_name: str) -> Any:
+        """Get a system by its type name"""
+        return self._systems.get(system_type_name)

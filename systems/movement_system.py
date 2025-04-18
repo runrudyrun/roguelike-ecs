@@ -10,6 +10,7 @@ from components.position import Position
 from components.ai_intent import AIIntent, ActionType
 from components.player_tag import PlayerTag
 from utils.debug import debug_print
+from utils.message_queue import add_message
 
 class MovementSystem(System):
     """System responsible for entity movement and collision detection"""
@@ -64,6 +65,17 @@ class MovementSystem(System):
         
         # Check if the move is valid
         if not self._is_valid_move(entity_manager, entity_id, new_x, new_y):
+            # Log collision message for player
+            is_player = entity_manager.has_component(entity_id, PlayerTag)
+            if is_player:
+                # Check what's blocking the way
+                if (new_x, new_y) in self._impassable_positions:
+                    add_message("You bump into a wall.", (200, 200, 200))
+                else:
+                    # Check if there's an entity there
+                    blocking_entity = self._occupancy_map.get((new_x, new_y))
+                    if blocking_entity:
+                        add_message("There's something in the way.", (200, 200, 200))
             return False
         
         # Update the occupancy map
@@ -77,6 +89,13 @@ class MovementSystem(System):
         
         # Move the entity
         position.set_position(new_x, new_y)
+        
+        # Log movement for player
+        is_player = entity_manager.has_component(entity_id, PlayerTag)
+        if is_player and (dx != 0 or dy != 0):
+            direction = self._get_direction_name(dx, dy)
+            add_message(f"You move {direction}.", (180, 180, 220))
+            
         return True
     
     def _is_valid_move(self, entity_manager: EntityManager, entity_id: int, 
@@ -203,3 +222,33 @@ class MovementSystem(System):
             Entity ID at the position, or None if no entity is there
         """
         return self._occupancy_map.get((x, y))
+    
+    def _get_direction_name(self, dx: int, dy: int) -> str:
+        """
+        Get a human-readable direction name from delta coordinates
+        
+        Args:
+            dx: Change in x position
+            dy: Change in y position
+            
+        Returns:
+            Direction name as string
+        """
+        if dx == 0 and dy == -1:
+            return "north"
+        elif dx == 0 and dy == 1:
+            return "south"
+        elif dx == -1 and dy == 0:
+            return "west"
+        elif dx == 1 and dy == 0:
+            return "east"
+        elif dx == 1 and dy == -1:
+            return "northeast"
+        elif dx == 1 and dy == 1:
+            return "southeast"
+        elif dx == -1 and dy == -1:
+            return "northwest"
+        elif dx == -1 and dy == 1:
+            return "southwest"
+        else:
+            return "nowhere"

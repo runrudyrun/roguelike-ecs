@@ -9,6 +9,11 @@ from ecs.system import System
 from ecs.entity_manager import EntityManager
 from components.position import Position
 from components.renderable import Renderable
+from components.player_tag import PlayerTag
+from components.health import Health
+from components.combat_stats import CombatStats
+from utils.debug import debug_print
+from utils.message_queue import get_messages
 
 
 class RenderSystem(System):
@@ -98,6 +103,9 @@ class RenderSystem(System):
             # Render the entity
             self._render_entity(screen_x, screen_y, renderable)
         
+        # Draw directly rendered UI elements
+        self._render_direct_ui(entity_manager)
+        
         # Update the display
         pygame.display.flip()
     
@@ -137,3 +145,115 @@ class RenderSystem(System):
         if position:
             self.camera_x = position.x - (self.grid_width // 2)
             self.camera_y = position.y - (self.grid_height // 2)
+            
+    def _wrap_text(self, text: str, font: pygame.font.Font, max_width: int) -> List[str]:
+        """
+        Wrap text to fit within a given width
+        
+        Args:
+            text: Text to wrap
+            font: Font to use for measuring text
+            max_width: Maximum width in pixels
+            
+        Returns:
+            List of wrapped text lines
+        """
+        words = text.split(' ')
+        lines = []
+        current_line = []
+        current_width = 0
+        
+        for word in words:
+            word_surface = font.render(word + ' ', True, (0, 0, 0))  # Color doesn't matter for measuring
+            word_width = word_surface.get_width()
+            
+            if current_width + word_width <= max_width:
+                current_line.append(word)
+                current_width += word_width
+            else:
+                if current_line:  # Don't add empty lines
+                    lines.append(' '.join(current_line))
+                current_line = [word]
+                current_width = word_width
+        
+        # Add the last line
+        if current_line:
+            lines.append(' '.join(current_line))
+            
+        # If no lines were created (e.g. single very long word), just return the original text
+        return lines if lines else [text]
+    
+    def _render_direct_ui(self, entity_manager: EntityManager) -> None:
+        """
+        Directly render UI elements without using the UI system
+        This ensures they're visible regardless of ECS integration issues
+        
+        Args:
+            entity_manager: The entity manager
+        """
+        # Get player data
+        player_entities = entity_manager.get_entities_with_components([PlayerTag])
+        if not player_entities:
+            debug_print("RenderSystem", "No player found for UI rendering")
+            return
+            
+        player_id = next(iter(player_entities))
+        health = entity_manager.get_component(player_id, Health)
+        combat_stats = entity_manager.get_component(player_id, CombatStats)
+        position = entity_manager.get_component(player_id, Position)
+        
+        if not health or not combat_stats or not position:
+            debug_print("RenderSystem", "Missing player components for UI rendering")
+            return
+        
+        # Calculate UI positions - top right of screen
+        ui_width = 200  # pixels
+        
+        # Create a player info UI box
+        info_rect = pygame.Rect(self.screen_width - ui_width, 0, ui_width, 120)
+        pygame.draw.rect(self.screen, (0, 0, 0), info_rect)  # Black background
+        pygame.draw.rect(self.screen, (200, 200, 200), info_rect, 2)  # White border
+        
+        # Draw player info title
+        font = pygame.font.SysFont("courier", 14)
+        title_surface = font.render("Player Info", True, (255, 255, 255))
+        self.screen.blit(title_surface, (self.screen_width - ui_width + 10, 5))
+        
+        # Draw player stats
+        stats_font = pygame.font.SysFont("courier", 12)
+        stats = [
+            f"HP: {health.current}/{health.max}",
+            f"ATK: {combat_stats.attack}",
+            f"DEF: {combat_stats.defense}",
+            f"POS: ({position.x}, {position.y})"  
+        ]
+        
+        for i, stat in enumerate(stats):
+            stat_surf = stats_font.render(stat, True, (255, 255, 255))
+            self.screen.blit(stat_surf, (self.screen_width - ui_width + 10, 30 + i * 20))
+        
+        # Create message log box below player info
+        log_rect = pygame.Rect(self.screen_width - ui_width, 130, ui_width, 200)
+        pygame.draw.rect(self.screen, (0, 0, 0), log_rect)  # Black background
+        pygame.draw.rect(self.screen, (200, 200, 200), log_rect, 2)  # White border
+        
+        # Draw log title
+        log_title = font.render("Message Log", True, (255, 255, 255))
+        self.screen.blit(log_title, (self.screen_width - ui_width + 10, 135))
+        
+        # Get recent messages from message queue
+        messages = get_messages(8)  # Show up to 8 messages
+        if not messages:
+            # If no messages, show a default message
+            empty_text = stats_font.render("(No messages)", True, (150, 150, 150))
+            self.screen.blit(empty_text, (self.screen_width - ui_width + 10, 160))
+        else:
+            # Display messages in the log (most recent at the bottom)
+            y_offset = 160
+            for text, color in messages:
+                # Wrap text if needed
+                wrapped_text = self._wrap_text(text, stats_font, ui_width - 20)
+                for line in wrapped_text:
+                    msg_surf = stats_font.render(line, True, color)
+                    self.screen.blit(msg_surf, (self.screen_width - ui_width + 10, y_offset))
+                    y_offset += 16  # Line spacing
