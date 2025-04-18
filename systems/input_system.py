@@ -25,6 +25,7 @@ class InputAction(Enum):
     PICKUP = auto()
     USE_ITEM = auto()
     EXAMINE = auto()
+    TOGGLE_FULLSCREEN = auto()
 
 class InputSystem(System):
     """System responsible for handling player input"""
@@ -51,7 +52,8 @@ class InputSystem(System):
             pygame.K_g: InputAction.PICKUP,
             pygame.K_u: InputAction.USE_ITEM,
             pygame.K_x: InputAction.EXAMINE,
-            pygame.K_ESCAPE: InputAction.QUIT
+            pygame.K_ESCAPE: InputAction.QUIT,
+            pygame.K_F11: InputAction.TOGGLE_FULLSCREEN
         }
         
         # Additional key mapping for numpad/vi keys

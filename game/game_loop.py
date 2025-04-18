@@ -25,7 +25,7 @@ class GameLoop:
     Manages the main game loop and system execution.
     """
     
-    def __init__(self, screen_width: int, screen_height: int, tile_size: int):
+    def __init__(self, screen_width: int, screen_height: int, tile_size: int, fullscreen: bool = False):
         """
         Initialize the game loop
         
@@ -36,6 +36,9 @@ class GameLoop:
         """
         # Initialize pygame
         pygame.init()
+        
+        # Store fullscreen flag
+        self.fullscreen = fullscreen
         
         # Calculate world dimensions based on screen size
         world_width = screen_width // tile_size
@@ -82,7 +85,7 @@ class GameLoop:
         self.systems.add_system(self.combat_system)
         
         # Render system
-        self.render_system = RenderSystem(screen_width, screen_height, tile_size)
+        self.render_system = RenderSystem(screen_width, screen_height, tile_size, fullscreen=self.fullscreen)
         self.systems.add_system(self.render_system)
         
         # UI system (must be added last to render on top)
@@ -106,6 +109,7 @@ class GameLoop:
         add_message("Welcome to Roguelike ECS!", (150, 255, 150))
         add_message("Use arrow keys to move", (200, 200, 255))
         add_message("Press 'a' to attack enemies", (200, 200, 255))
+        add_message("Press 'F11' to toggle fullscreen", (200, 200, 255))
         add_message("Press 'q' to quit", (200, 200, 255))
         
         # Game clock for timing
@@ -147,6 +151,12 @@ class GameLoop:
             InputAction.ATTACK,
             self._handle_attack_action
         )
+        
+        # Toggle fullscreen action
+        self.input_system.register_action_callback(
+            InputAction.TOGGLE_FULLSCREEN,
+            lambda em, player_id: self._toggle_fullscreen()
+        )
     
     def _handle_attack_action(self, entity_manager: EntityManager, player_id: int) -> bool:
         """
@@ -183,6 +193,12 @@ class GameLoop:
                     return True
         
         return False
+    
+    def _toggle_fullscreen(self) -> None:
+        """Toggle fullscreen mode"""
+        self.render_system.toggle_fullscreen()
+        # Return True so the input system knows we performed an action
+        return True
     
     def initialize_game(self) -> None:
         """Initialize the game state and configure systems"""

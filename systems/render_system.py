@@ -20,7 +20,7 @@ class RenderSystem(System):
     """System responsible for rendering entities to the screen"""
     
     def __init__(self, screen_width: int, screen_height: int, 
-                 tile_size: int, font_name: str = "courier"):
+                 tile_size: int, font_name: str = "courier", fullscreen: bool = False):
         """
         Initialize the render system
         
@@ -50,7 +50,15 @@ class RenderSystem(System):
         # Initialize pygame components
         pygame.font.init()
         self.font = pygame.font.SysFont(font_name, tile_size)
-        self.screen = pygame.display.set_mode((screen_width, screen_height))
+        
+        # Store dimensions for toggling fullscreen
+        self.screen_width = screen_width
+        self.screen_height = screen_height
+        self.is_fullscreen = fullscreen
+        
+        # Set display mode (fullscreen or windowed)
+        flags = pygame.FULLSCREEN if fullscreen else 0
+        self.screen = pygame.display.set_mode((screen_width, screen_height), flags)
         pygame.display.set_caption("Roguelike ECS")
         
         # Camera offset (for scrolling)
@@ -257,3 +265,14 @@ class RenderSystem(System):
                     msg_surf = stats_font.render(line, True, color)
                     self.screen.blit(msg_surf, (self.screen_width - ui_width + 10, y_offset))
                     y_offset += 16  # Line spacing
+    
+    def toggle_fullscreen(self) -> None:
+        """
+        Toggle between fullscreen and windowed mode
+        """
+        self.is_fullscreen = not self.is_fullscreen
+        flags = pygame.FULLSCREEN if self.is_fullscreen else 0
+        self.screen = pygame.display.set_mode((self.screen_width, self.screen_height), flags)
+        # Force UI elements to recalculate their positions
+        pygame.event.post(pygame.event.Event(pygame.VIDEORESIZE, 
+                                            {'w': self.screen_width, 'h': self.screen_height}))
