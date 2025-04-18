@@ -64,6 +64,12 @@ class World:
             x = random.randint(2, self.width - 3)
             y = random.randint(2, self.height - 3)
             self.walls.add((x, y))
+        
+        # Create wall entities with renderable components
+        for wall_pos in self.walls:
+            wall_entity = self.entity_manager.create_entity()
+            self.entity_manager.add_component(wall_entity, Position(wall_pos[0], wall_pos[1]))
+            self.entity_manager.add_component(wall_entity, Renderable('#', (150, 150, 150)))
     
     def is_wall(self, x: int, y: int) -> bool:
         """
