@@ -242,6 +242,7 @@ class RenderSystem(System):
         
         # Create message log box below player info
         log_rect = pygame.Rect(self.screen_width - ui_width, 130, ui_width, 200)
+        log_content_height = 200 - 25  # Adjust for title height
         pygame.draw.rect(self.screen, (0, 0, 0), log_rect)  # Black background
         pygame.draw.rect(self.screen, (200, 200, 200), log_rect, 2)  # White border
         
@@ -249,22 +250,57 @@ class RenderSystem(System):
         log_title = font.render("Message Log", True, (255, 255, 255))
         self.screen.blit(log_title, (self.screen_width - ui_width + 10, 135))
         
-        # Get recent messages from message queue
-        messages = get_messages(8)  # Show up to 8 messages
+        # Get recent messages from message queue - adjust count dynamically based on space
+        line_height = 16  # Line spacing
+        max_visible_lines = log_content_height // line_height
+        max_message_count = max(1, max_visible_lines // 2)  # Conservative estimate (assume avg 2 lines per message)
+        
+        messages = get_messages(max_message_count)
+        
         if not messages:
             # If no messages, show a default message
             empty_text = stats_font.render("(No messages)", True, (150, 150, 150))
             self.screen.blit(empty_text, (self.screen_width - ui_width + 10, 160))
         else:
-            # Display messages in the log (most recent at the bottom)
-            y_offset = 160
+            # Preview messages to calculate total lines and adjust which ones to show
+            message_lines = []
             for text, color in messages:
-                # Wrap text if needed
                 wrapped_text = self._wrap_text(text, stats_font, ui_width - 20)
-                for line in wrapped_text:
-                    msg_surf = stats_font.render(line, True, color)
-                    self.screen.blit(msg_surf, (self.screen_width - ui_width + 10, y_offset))
-                    y_offset += 16  # Line spacing
+                message_lines.append((wrapped_text, color))
+            
+            # Calculate total lines
+            total_lines = sum(len(lines) for lines, _ in message_lines)
+            
+            # If too many lines, keep the most recent ones that fit
+            if total_lines > max_visible_lines:
+                # Start from most recent messages and work backward
+                message_lines.reverse()  # Newest first
+                fitting_messages = []
+                lines_so_far = 0
+                
+                for wrapped_lines, color in message_lines:
+                    lines_in_msg = len(wrapped_lines)
+                    if lines_so_far + lines_in_msg <= max_visible_lines:
+                        fitting_messages.append((wrapped_lines, color))
+                        lines_so_far += lines_in_msg
+                    else:
+                        # No more space
+                        break
+                
+                # Restore original order (oldest first)
+                fitting_messages.reverse()
+                message_lines = fitting_messages
+            
+            # Start just below the title
+            y_offset = 160
+            # Display messages
+            for wrapped_lines, color in message_lines:
+                for line in wrapped_lines:
+                    # Check if we're still within the log box
+                    if y_offset < log_rect.bottom - line_height:
+                        msg_surf = stats_font.render(line, True, color)
+                        self.screen.blit(msg_surf, (self.screen_width - ui_width + 10, y_offset))
+                        y_offset += line_height
     
     def toggle_fullscreen(self) -> None:
         """
