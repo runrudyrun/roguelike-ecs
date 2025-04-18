@@ -243,6 +243,10 @@ class GameLoop:
             # Clean up any entities marked for deletion
             self.entity_manager.cleanup_entities()
             
+            # Center the camera on the player after movement has been processed
+            if self.world.player_id:
+                self.render_system.center_camera_on_entity(self.world.player_id, self.entity_manager)
+            
             # Increment turn counter in the turn scheduler
             self.turn_scheduler.advance_turn()
         
